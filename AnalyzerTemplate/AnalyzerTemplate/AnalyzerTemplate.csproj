@@ -14,8 +14,17 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Update="Resources.Designer.cs" DesignTime="True" AutoGen="True" DependentUpon="Resources.resx" />
-    <EmbeddedResource Update="Resources.resx" Generator="ResXFileCodeGenerator" LastGenOutput="Resources.Designer.cs" />
+    <Compile Update="ToStringResources.Designer.cs">
+      <DependentUpon>ToStringResources.resx</DependentUpon>
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+    </Compile>
+    <Compile Update="BoolResources.Designer.cs" DesignTime="True" AutoGen="True" DependentUpon="BoolResources.resx" />
+    <EmbeddedResource Update="ToStringResources.resx">
+      <LastGenOutput>ToStringResources.Designer.cs</LastGenOutput>
+      <Generator>ResXFileCodeGenerator</Generator>
+    </EmbeddedResource>
+    <EmbeddedResource Update="BoolResources.resx" Generator="ResXFileCodeGenerator" LastGenOutput="BoolResources.Designer.cs" />
   </ItemGroup>
 
 </Project>

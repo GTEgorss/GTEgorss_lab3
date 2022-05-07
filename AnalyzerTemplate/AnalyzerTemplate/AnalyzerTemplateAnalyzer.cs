@@ -1,8 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using System.Linq;
-using System.Threading;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -13,42 +10,107 @@ namespace AnalyzerTemplate
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public class AnalyzerTemplateAnalyzer : DiagnosticAnalyzer
     {
-        public const string DiagnosticId = "AnalyzerTemplate";
+        public const string BoolDiagnosticId = "BoolAnalyzer";
+        private static readonly LocalizableString BoolTitle = new LocalizableResourceString(nameof(BoolResources.AnalyzerTitle), BoolResources.ResourceManager, typeof(BoolResources));
+        private static readonly LocalizableString BoolMessageFormat = new LocalizableResourceString(nameof(BoolResources.AnalyzerMessageFormat), BoolResources.ResourceManager, typeof(BoolResources));
+        private static readonly LocalizableString BoolDescription = new LocalizableResourceString(nameof(BoolResources.AnalyzerDescription), BoolResources.ResourceManager, typeof(BoolResources));
+        private const string BoolCategory = "Naming";
 
-        // You can change these strings in the Resources.resx file. If you do not want your analyzer to be localize-able, you can use regular strings for Title and MessageFormat.
-        // See https://github.com/dotnet/roslyn/blob/main/docs/analyzers/Localizing%20Analyzers.md for more on localization
-        private static readonly LocalizableString Title = new LocalizableResourceString(nameof(Resources.AnalyzerTitle), Resources.ResourceManager, typeof(Resources));
-        private static readonly LocalizableString MessageFormat = new LocalizableResourceString(nameof(Resources.AnalyzerMessageFormat), Resources.ResourceManager, typeof(Resources));
-        private static readonly LocalizableString Description = new LocalizableResourceString(nameof(Resources.AnalyzerDescription), Resources.ResourceManager, typeof(Resources));
-        private const string Category = "Naming";
+        private static readonly DiagnosticDescriptor BoolRule = new DiagnosticDescriptor(BoolDiagnosticId, BoolTitle, BoolMessageFormat, BoolCategory, DiagnosticSeverity.Warning, isEnabledByDefault: true, description: BoolDescription);
 
-        private static readonly DiagnosticDescriptor Rule = new DiagnosticDescriptor(DiagnosticId, Title, MessageFormat, Category, DiagnosticSeverity.Warning, isEnabledByDefault: true, description: Description);
+        public const string ToStringDiagnosticId = "ToStringAnalyzer";
+        private static readonly LocalizableString ToStringTitle = new LocalizableResourceString(nameof(ToStringResources.AnalyzerTitle), ToStringResources.ResourceManager, typeof(ToStringResources));
+        private static readonly LocalizableString ToStringMessageFormat = new LocalizableResourceString(nameof(ToStringResources.AnalyzerMessageFormat), ToStringResources.ResourceManager, typeof(ToStringResources));
+        private static readonly LocalizableString ToStringDescription = new LocalizableResourceString(nameof(ToStringResources.AnalyzerDescription), ToStringResources.ResourceManager, typeof(ToStringResources));
+        private const string ToStringCategory = "CodeStyle";
 
-        public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get { return ImmutableArray.Create(Rule); } }
+        private static readonly DiagnosticDescriptor ToStringRule = new DiagnosticDescriptor(ToStringDiagnosticId, ToStringTitle, ToStringMessageFormat, ToStringCategory, DiagnosticSeverity.Warning, isEnabledByDefault: true, description: ToStringDescription);
+
+        public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get { return ImmutableArray.Create(BoolRule, ToStringRule); } }
 
         public override void Initialize(AnalysisContext context)
         {
             context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
             context.EnableConcurrentExecution();
 
-            // TODO: Consider registering other actions that act on syntax instead of or in addition to symbols
-            // See https://github.com/dotnet/roslyn/blob/main/docs/analyzers/Analyzer%20Actions%20Semantics.md for more information
-            context.RegisterSymbolAction(AnalyzeSymbol, SymbolKind.NamedType);
+            context.RegisterSyntaxNodeAction(AnalyzeBooleansWithNot, SyntaxKind.VariableDeclaration);
+
+            context.RegisterSyntaxNodeAction(AnalyzeToStringCalls, SyntaxKind.SimpleMemberAccessExpression);
         }
 
-        private static void AnalyzeSymbol(SymbolAnalysisContext context)
+        private static void AnalyzeBooleansWithNot(SyntaxNodeAnalysisContext context)
         {
-            // TODO: Replace the following code with your own analysis, generating Diagnostic objects for any issues you find
-            var namedTypeSymbol = (INamedTypeSymbol)context.Symbol;
+            var declarationExpr = (VariableDeclarationSyntax)context.Node;
 
-            // Find just those named type symbols with names containing lowercase letters.
-            if (namedTypeSymbol.Name.ToCharArray().Any(char.IsLower))
-            {
-                // For all such symbols, produce a diagnostic.
-                var diagnostic = Diagnostic.Create(Rule, namedTypeSymbol.Locations[0], namedTypeSymbol.Name);
+            string variableName = declarationExpr.DescendantNodes().OfType<VariableDeclaratorSyntax>().FirstOrDefault().Identifier.ValueText;
 
-                context.ReportDiagnostic(diagnostic);
+            if (declarationExpr.DescendantNodes().OfType<PredefinedTypeSyntax>().FirstOrDefault() != null && 
+                declarationExpr.DescendantNodes().OfType<PredefinedTypeSyntax>().FirstOrDefault().Keyword.Kind() == SyntaxKind.BoolKeyword) {
+                if ((variableName[0] == 'n' || variableName[0] == 'N') && (variableName[1] == 'o' || variableName[1] == 'O') && (variableName[2] == 't' || variableName[2] == 'T'))
+                {
+                    var diagnostic = Diagnostic.Create(BoolRule, declarationExpr.GetLocation(), variableName);
+                    context.ReportDiagnostic(diagnostic);
+                }
             }
+        }
+
+        private static void AnalyzeToStringCalls(SyntaxNodeAnalysisContext context)
+        {
+            var toStringInvocation = (MemberAccessExpressionSyntax)context.Node;
+
+            if (toStringInvocation.Name.Identifier.ValueText == "ToString") {
+                var invocationIdentifier = toStringInvocation.DescendantNodes().OfType<IdentifierNameSyntax>().First().Identifier.ValueText;
+
+                var invocationType = toStringInvocation.Ancestors().SelectMany(a => a.DescendantNodes().OfType<VariableDeclarationSyntax>())
+                    .FirstOrDefault(d => d.DescendantNodes().OfType<VariableDeclaratorSyntax>().FirstOrDefault().Identifier.ValueText == invocationIdentifier)
+                    .DescendantNodes().OfType<VariableDeclaratorSyntax>().FirstOrDefault()
+                    .Initializer.Value.DescendantNodes().OfType<IdentifierNameSyntax>().FirstOrDefault().Identifier.ValueText;
+
+                var invocationTypeNode = toStringInvocation.Ancestors().OfType<ClassDeclarationSyntax>().FirstOrDefault(a => a.Identifier.ValueText == invocationType);
+
+                if (!HasToString(invocationTypeNode)) {
+                    var parentClass = GetClassParent(invocationTypeNode);
+
+                    while (parentClass != null)
+                    {
+                        if (parentClass != null && HasToString(parentClass))
+                        {
+                            return;
+                        }
+
+                        parentClass = GetClassParent(parentClass);
+                    }
+
+                    var diagnostic = Diagnostic.Create(ToStringRule, toStringInvocation.GetLocation(), invocationIdentifier);
+                    context.ReportDiagnostic(diagnostic);
+                }
+            }
+        }
+
+        private static ClassDeclarationSyntax GetClassParent(SyntaxNode classNode)
+        {
+            var baseType = classNode.DescendantNodes().OfType<SimpleBaseTypeSyntax>().FirstOrDefault();
+
+            if (baseType == null)
+            {
+                return null;
+            }
+
+            var parentName = baseType.DescendantNodes().OfType<IdentifierNameSyntax>().First().Identifier.ValueText;
+
+            if (parentName.ToLower() == "object")
+            {
+                return null;
+            }
+
+            var parent = classNode.Ancestors().SelectMany(a => a.DescendantNodes()).OfType<ClassDeclarationSyntax>().FirstOrDefault(d => d.Identifier.ValueText == parentName);
+
+            return parent;
+        }
+
+        private static bool HasToString(SyntaxNode classNode)
+        {
+            return classNode.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.ValueText == "ToString") != null;
         }
     }
 }

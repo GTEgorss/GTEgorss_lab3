@@ -1,4 +1,5 @@
-﻿using System.Threading.Tasks;
+﻿using System;
+using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using VerifyCS = AnalyzerTemplate.Test.CSharpCodeFixVerifier<
     AnalyzerTemplate.AnalyzerTemplateAnalyzer,
@@ -9,50 +10,45 @@ namespace AnalyzerTemplate.Test
     [TestClass]
     public class AnalyzerTemplateUnitTest
     {
-        //No diagnostics expected to show up
         [TestMethod]
-        public async Task TestMethod1()
-        {
-            var test = @"";
-
-            await VerifyCS.VerifyAnalyzerAsync(test);
-        }
-
-        //Diagnostic and CodeFix both triggered and checked for
-        [TestMethod]
-        public async Task TestMethod2()
+        public async Task TestMethod()
         {
             var test = @"
-    using System;
-    using System.Collections.Generic;
-    using System.Linq;
-    using System.Text;
-    using System.Threading.Tasks;
-    using System.Diagnostics;
-
-    namespace ConsoleApplication1
+namespace notClassLibrary1
+{
+    public class notClass1
     {
-        class {|#0:TypeName|}
-        {   
+        void notMethod(bool flag, int value)
+        {
+            bool {|#0:notAvailable|} = false;
+
+            if (notAvailable)
+            {
+
+            }
         }
-    }";
+    }
+}";
 
             var fixtest = @"
-    using System;
-    using System.Collections.Generic;
-    using System.Linq;
-    using System.Text;
-    using System.Threading.Tasks;
-    using System.Diagnostics;
-
-    namespace ConsoleApplication1
+namespace notClassLibrary1
+{
+    public class notClass1
     {
-        class TYPENAME
-        {   
-        }
-    }";
+        void notMethod(bool flag, int value)
+        {
+            bool Available = false;
 
-            var expected = VerifyCS.Diagnostic("AnalyzerTemplate").WithLocation(0).WithArguments("TypeName");
+            if (!Available)
+            {
+
+            }
+        }
+    }
+}";
+
+            var expected = VerifyCS.Diagnostic("AnalyzerTemplate").WithLocation(0);
+            //Console.WriteLine(expected.);
             await VerifyCS.VerifyCodeFixAsync(test, expected, fixtest);
         }
     }
